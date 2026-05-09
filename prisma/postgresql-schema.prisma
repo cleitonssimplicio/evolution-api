@@ -111,6 +111,8 @@ model Instance {
   N8nSetting              N8nSetting[]
   Evoai                   Evoai[]
   EvoaiSetting            EvoaiSetting?
+  AiFilterBot             AiFilterBot[]
+  AiFilterSetting         AiFilterSetting?
 }
 
 model Session {
@@ -419,6 +421,7 @@ model OpenaiCreds {
   instanceId      String
   OpenaiAssistant OpenaiBot[]
   OpenaiSetting   OpenaiSetting?
+  AiFilterBot     AiFilterBot[]
 }
 
 model OpenaiBot {
@@ -760,4 +763,56 @@ model EvoaiSetting {
   evoaiIdFallback String?   @db.VarChar(100)
   Instance        Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   instanceId      String    @unique
+}
+
+model AiFilterBot {
+  id                String           @id @default(cuid())
+  enabled           Boolean          @default(true) @db.Boolean
+  description       String?          @db.VarChar(255)
+  openaiCredsId     String
+  model             String           @default("gpt-4o-mini") @db.VarChar(100)
+  systemPrompt      String?          @db.Text
+  filterCategories  Json?            @db.JsonB
+  autoRespondPrompt String?          @db.Text
+  expire            Int?             @default(0) @db.Integer
+  keywordFinish     String?          @db.VarChar(100)
+  delayMessage      Int?             @db.Integer
+  unknownMessage    String?          @db.VarChar(100)
+  listeningFromMe   Boolean?         @default(false) @db.Boolean
+  stopBotFromMe     Boolean?         @default(false) @db.Boolean
+  keepOpen          Boolean?         @default(false) @db.Boolean
+  debounceTime      Int?             @db.Integer
+  ignoreJids        Json?            @db.JsonB
+  splitMessages     Boolean?         @default(false) @db.Boolean
+  timePerChar       Int?             @default(0) @db.Integer
+  triggerType       TriggerType?
+  triggerOperator   TriggerOperator?
+  triggerValue      String?
+  createdAt         DateTime?        @default(now()) @db.Timestamp
+  updatedAt         DateTime         @updatedAt @db.Timestamp
+  Instance          Instance         @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  instanceId        String
+  OpenaiCreds       OpenaiCreds      @relation(fields: [openaiCredsId], references: [id], onDelete: Cascade)
+  AiFilterSetting   AiFilterSetting[]
+}
+
+model AiFilterSetting {
+  id              String       @id @default(cuid())
+  expire          Int?         @default(0) @db.Integer
+  keywordFinish   String?      @db.VarChar(100)
+  delayMessage    Int?         @db.Integer
+  unknownMessage  String?      @db.VarChar(100)
+  listeningFromMe Boolean?     @default(false) @db.Boolean
+  stopBotFromMe   Boolean?     @default(false) @db.Boolean
+  keepOpen        Boolean?     @default(false) @db.Boolean
+  debounceTime    Int?         @db.Integer
+  ignoreJids      Json?        @db.JsonB
+  splitMessages   Boolean?     @default(false) @db.Boolean
+  timePerChar     Int?         @default(0) @db.Integer
+  createdAt       DateTime?    @default(now()) @db.Timestamp
+  updatedAt       DateTime     @updatedAt @db.Timestamp
+  Fallback        AiFilterBot? @relation(fields: [botIdFallback], references: [id])
+  botIdFallback   String?      @db.VarChar(100)
+  Instance        Instance     @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  instanceId      String       @unique
 }
