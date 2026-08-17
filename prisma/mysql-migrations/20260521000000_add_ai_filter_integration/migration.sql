@@ -5,6 +5,7 @@ CREATE TABLE `AiFilterBot` (
     `description` VARCHAR(255) NULL,
     `openaiCredsId` VARCHAR(191) NOT NULL,
     `model` VARCHAR(100) NOT NULL DEFAULT 'gpt-4o-mini',
+    `apiBaseUrl` VARCHAR(255) NULL,
     `systemPrompt` TEXT NULL,
     `filterCategories` JSON NULL,
     `autoRespondPrompt` TEXT NULL,

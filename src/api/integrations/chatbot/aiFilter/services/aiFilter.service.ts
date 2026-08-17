@@ -26,8 +26,59 @@ export class AiFilterService extends BaseChatbotService<AiFilterBot, AiFilterSet
     return 'aiFilter';
   }
 
-  private initClient(apiKey: string): void {
-    this.client = new OpenAI({ apiKey });
+  /**
+   * Aceita qualquer endpoint compativel com a API da OpenAI, o que permite usar
+   * provedores com plano gratuito (Groq, Gemini, OpenRouter, Ollama) sem
+   * nenhuma alteracao de codigo - basta configurar apiBaseUrl no bot.
+   */
+  private initClient(apiKey: string, apiBaseUrl?: string | null): void {
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: apiBaseUrl?.trim() || undefined,
+    });
+  }
+
+  /**
+   * Modelos abertos costumam devolver o JSON embrulhado em bloco markdown ou
+   * cercado de texto. Extrai o objeto JSON de forma tolerante.
+   */
+  private parseJsonLoose(raw: string): any {
+    const cleaned = raw
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```$/, '')
+      .trim();
+
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      }
+      throw new Error('no JSON object found');
+    }
+  }
+
+  /**
+   * Nem todo provedor gratuito suporta response_format json_object. Tenta com
+   * o modo JSON e, se o provedor recusar, repete sem ele.
+   */
+  private async createCompletion(params: any, useJsonMode: boolean): Promise<string> {
+    try {
+      const completion = await this.client.chat.completions.create(
+        useJsonMode ? { ...params, response_format: { type: 'json_object' } } : params,
+      );
+      return completion.choices[0]?.message?.content || '';
+    } catch (error: any) {
+      if (useJsonMode) {
+        this.logger.warn(`Provider rejected json_object mode, retrying without it: ${error?.message || error}`);
+        const completion = await this.client.chat.completions.create(params);
+        return completion.choices[0]?.message?.content || '';
+      }
+      throw error;
+    }
   }
 
   private buildClassificationPrompt(filterCategories: AiFilterCategory[], systemPrompt?: string): string {
@@ -67,21 +118,21 @@ Rules:
     const classificationSystem = this.buildClassificationPrompt(filterCategories, systemPrompt);
     const userMessage = pushName ? `From ${pushName}: ${content}` : content;
 
-    const completion = await this.client.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: classificationSystem },
-        { role: 'user', content: userMessage },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
-      max_tokens: 800,
-    });
-
-    const rawResult = completion.choices[0]?.message?.content || '{}';
+    const rawResult = await this.createCompletion(
+      {
+        model,
+        messages: [
+          { role: 'system', content: classificationSystem },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.2,
+        max_tokens: 800,
+      },
+      true,
+    );
 
     try {
-      const parsed = JSON.parse(rawResult) as ClassificationResult;
+      const parsed = this.parseJsonLoose(rawResult) as ClassificationResult;
       const validActions: Array<'auto_respond' | 'flag_human' | 'ignore'> = ['auto_respond', 'flag_human', 'ignore'];
       if (!parsed.action || !validActions.includes(parsed.action)) {
         parsed.action = 'flag_human';
@@ -111,14 +162,7 @@ Rules:
 
     messages.push({ role: 'user', content: pushName ? `${pushName}: ${content}` : content });
 
-    const completion = await this.client.chat.completions.create({
-      model,
-      messages,
-      temperature: 0.7,
-      max_tokens: 500,
-    });
-
-    return completion.choices[0]?.message?.content || '';
+    return this.createCompletion({ model, messages, temperature: 0.7, max_tokens: 500 }, false);
   }
 
   public async process(
@@ -191,7 +235,7 @@ Rules:
         return;
       }
 
-      this.initClient(creds.apiKey);
+      this.initClient(creds.apiKey, bot.apiBaseUrl);
 
       const filterCategories: AiFilterCategory[] = Array.isArray(bot.filterCategories)
         ? (bot.filterCategories as unknown as AiFilterCategory[])

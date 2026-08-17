@@ -771,6 +771,7 @@ model AiFilterBot {
   description       String?          @db.VarChar(255)
   openaiCredsId     String
   model             String           @default("gpt-4o-mini") @db.VarChar(100)
+  apiBaseUrl        String?          @db.VarChar(255)
   systemPrompt      String?          @db.Text
   filterCategories  Json?            @db.JsonB
   autoRespondPrompt String?          @db.Text

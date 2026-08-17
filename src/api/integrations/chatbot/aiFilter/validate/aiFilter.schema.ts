@@ -28,6 +28,7 @@ export const aiFilterSchema: JSONSchema7 = {
     description: { type: 'string' },
     openaiCredsId: { type: 'string' },
     model: { type: 'string' },
+    apiBaseUrl: { type: 'string' },
     systemPrompt: { type: 'string' },
     filterCategories: {
       type: 'array',

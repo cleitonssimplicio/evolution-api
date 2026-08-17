@@ -45,6 +45,7 @@ export class AiFilterController extends BaseChatbotController<AiFilterBot, AiFil
     return {
       openaiCredsId: data.openaiCredsId,
       model: data.model,
+      apiBaseUrl: data.apiBaseUrl,
       systemPrompt: data.systemPrompt,
       filterCategories: data.filterCategories,
       autoRespondPrompt: data.autoRespondPrompt,
@@ -55,6 +56,7 @@ export class AiFilterController extends BaseChatbotController<AiFilterBot, AiFil
     return {
       openaiCredsId: data.openaiCredsId,
       model: data.model,
+      apiBaseUrl: data.apiBaseUrl,
       systemPrompt: data.systemPrompt,
       filterCategories: data.filterCategories,
       autoRespondPrompt: data.autoRespondPrompt,

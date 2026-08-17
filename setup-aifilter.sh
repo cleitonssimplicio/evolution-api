@@ -13,14 +13,47 @@ API_URL="${API_URL:-http://localhost:8080}"
 INSTANCE="${INSTANCE:-meu-whatsapp}"
 QR_FILE="${QR_FILE:-qrcode.png}"
 
-# Le a chave da API e a chave da OpenAI do .env
+# Le as chaves do .env
 if [[ -f .env ]]; then
   API_KEY="${API_KEY:-$(grep -E '^AUTHENTICATION_API_KEY=' .env | head -1 | cut -d= -f2-)}"
   OPENAI_KEY="${OPENAI_KEY:-$(grep -E '^OPENAI_API_KEY_GLOBAL=' .env | head -1 | cut -d= -f2-)}"
+  AI_PROVIDER="${AI_PROVIDER:-$(grep -E '^AI_PROVIDER=' .env | head -1 | cut -d= -f2-)}"
+  AI_MODEL="${AI_MODEL:-$(grep -E '^AI_MODEL=' .env | head -1 | cut -d= -f2-)}"
 fi
 
 API_KEY="${API_KEY:-}"
 OPENAI_KEY="${OPENAI_KEY:-}"
+AI_PROVIDER="${AI_PROVIDER:-groq}"
+AI_MODEL="${AI_MODEL:-}"
+
+# Provedores compativeis com a API da OpenAI. Os quatro primeiros tem plano gratuito.
+case "$AI_PROVIDER" in
+  groq)
+    AI_BASE_URL="https://api.groq.com/openai/v1"
+    AI_MODEL="${AI_MODEL:-llama-3.3-70b-versatile}"
+    KEY_HELP="https://console.groq.com/keys (gratuito)" ;;
+  gemini)
+    AI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai"
+    AI_MODEL="${AI_MODEL:-gemini-2.0-flash}"
+    KEY_HELP="https://aistudio.google.com/apikey (gratuito)" ;;
+  openrouter)
+    AI_BASE_URL="https://openrouter.ai/api/v1"
+    AI_MODEL="${AI_MODEL:-meta-llama/llama-3.3-70b-instruct:free}"
+    KEY_HELP="https://openrouter.ai/keys (tem modelos :free)" ;;
+  ollama)
+    AI_BASE_URL="${OLLAMA_URL:-http://localhost:11434/v1}"
+    AI_MODEL="${AI_MODEL:-llama3.1}"
+    OPENAI_KEY="${OPENAI_KEY:-ollama}"
+    KEY_HELP="nao precisa de chave (roda na sua maquina)" ;;
+  openai)
+    AI_BASE_URL=""
+    AI_MODEL="${AI_MODEL:-gpt-4o-mini}"
+    KEY_HELP="https://platform.openai.com/api-keys (PAGO)" ;;
+  *)
+    echo "ERRO: AI_PROVIDER invalido: '$AI_PROVIDER'" >&2
+    echo "      Use: groq | gemini | openrouter | ollama | openai" >&2
+    exit 1 ;;
+esac
 
 if [[ -z "$API_KEY" || "$API_KEY" == troque-esta-chave* ]]; then
   echo "ERRO: AUTHENTICATION_API_KEY nao configurada no .env" >&2
@@ -28,11 +61,15 @@ if [[ -z "$API_KEY" || "$API_KEY" == troque-esta-chave* ]]; then
   exit 1
 fi
 
-if [[ -z "$OPENAI_KEY" || "$OPENAI_KEY" == sk-cole-sua-chave* ]]; then
+if [[ -z "$OPENAI_KEY" || "$OPENAI_KEY" == cole-sua-chave* || "$OPENAI_KEY" == sk-cole-sua-chave* ]]; then
   echo "ERRO: OPENAI_API_KEY_GLOBAL nao configurada no .env" >&2
-  echo "      Pegue a sua em https://platform.openai.com/api-keys" >&2
+  echo "      Provedor atual: $AI_PROVIDER - pegue a chave em $KEY_HELP" >&2
   exit 1
 fi
+
+echo "Provedor de IA: $AI_PROVIDER   modelo: $AI_MODEL"
+[[ -n "$AI_BASE_URL" ]] && echo "Endpoint .....: $AI_BASE_URL"
+echo ""
 
 api() {
   local method=$1 path=$2 body=${3:-}
@@ -86,9 +123,11 @@ else
 fi
 
 echo ""
-echo "==> 3/5 Aguardando voce escanear o QR code (ate 3 minutos)"
+# Segundos de espera pelo scan do QR. QR_WAIT=0 pula a espera.
+QR_WAIT="${QR_WAIT:-180}"
+echo "==> 3/5 Aguardando voce escanear o QR code (ate ${QR_WAIT}s)"
 CONNECTED=false
-for i in $(seq 1 90); do
+for i in $(seq 1 $(( QR_WAIT / 2 ))); do
   STATE=$(api GET "/instance/connectionState/$INSTANCE" 2>/dev/null | python3 -c "
 import sys,json
 try:
@@ -135,7 +174,8 @@ BOT=$(api POST "/aiFilter/create/$INSTANCE" "{
   \"enabled\": true,
   \"description\": \"Filtro de IA principal\",
   \"openaiCredsId\": \"$CREDS_ID\",
-  \"model\": \"gpt-4o-mini\",
+  \"model\": \"$AI_MODEL\",
+  \"apiBaseUrl\": \"$AI_BASE_URL\",
   \"triggerType\": \"all\",
   \"systemPrompt\": \"Voce classifica mensagens recebidas no WhatsApp de um negocio. Seja preciso e responda sempre em portugues do Brasil.\",
   \"autoRespondPrompt\": \"Voce e um atendente virtual educado e objetivo. Responda em portugues do Brasil, em no maximo 3 frases.\",
@@ -177,6 +217,7 @@ echo "================================================================"
 echo " Pronto."
 echo ""
 echo " Instancia .......: $INSTANCE"
+echo " Provedor de IA ..: $AI_PROVIDER ($AI_MODEL)"
 echo " Painel web ......: http://localhost:3000"
 echo " API .............: $API_URL"
 echo ""
