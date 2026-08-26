@@ -11,7 +11,6 @@ set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:8080}"
 INSTANCE="${INSTANCE:-meu-whatsapp}"
-QR_FILE="${QR_FILE:-qrcode.png}"
 
 # Le as chaves do .env
 if [[ -f .env ]]; then
@@ -88,63 +87,21 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-echo "==> 2/5 Criando a instancia '$INSTANCE'"
-CREATE=$(api POST /instance/create "{\"instanceName\":\"$INSTANCE\",\"qrcode\":true,\"integration\":\"WHATSAPP-BAILEYS\"}" || true)
-
-if echo "$CREATE" | grep -q 'already in use'; then
-  echo "    Instancia ja existe, reaproveitando."
-  CREATE=$(api GET "/instance/connect/$INSTANCE")
-fi
-
-echo "$CREATE" | python3 -c "
-import sys, json, base64
-d = json.load(sys.stdin)
-qr = d.get('qrcode') or d
-b64 = (qr.get('base64') or '').split(',')[-1]
-if not b64:
-    print('SEM_QR')
-    sys.exit(0)
-open('$QR_FILE','wb').write(base64.b64decode(b64))
-print('QR_OK')
-" > /tmp/.aifilter_qr_status
-
-if grep -q QR_OK /tmp/.aifilter_qr_status; then
-  echo ""
-  echo "    QR code salvo em: $QR_FILE"
-  echo "    Abra o arquivo e escaneie com o WhatsApp do celular:"
-  echo "      WhatsApp > Configuracoes > Aparelhos conectados > Conectar aparelho"
-  echo ""
-  echo "    (ou use a interface web em http://localhost:3000)"
-  # Tenta abrir a imagem automaticamente
-  (command -v xdg-open >/dev/null && xdg-open "$QR_FILE" >/dev/null 2>&1) || \
-  (command -v open >/dev/null && open "$QR_FILE" >/dev/null 2>&1) || true
+echo "==> 2/5 e 3/5 Conectando o WhatsApp"
+# A conexao fica a cargo do whatsapp.sh, que desenha o QR no proprio terminal
+# e ainda aceita conectar por codigo de 8 digitos (util em servidor sem tela).
+if [[ -x ./whatsapp.sh ]]; then
+  if INSTANCE="$INSTANCE" API_URL="$API_URL" API_KEY="$API_KEY" ./whatsapp.sh connect "${PHONE_NUMBER:-}"; then
+    echo ""
+  else
+    echo ""
+    echo "AVISO: o WhatsApp ainda nao conectou." >&2
+    echo "       O filtro sera configurado assim mesmo; depois rode: ./whatsapp.sh connect" >&2
+    echo ""
+  fi
 else
-  echo "    Instancia ja conectada ou sem QR pendente."
-fi
-
-echo ""
-# Segundos de espera pelo scan do QR. QR_WAIT=0 pula a espera.
-QR_WAIT="${QR_WAIT:-180}"
-echo "==> 3/5 Aguardando voce escanear o QR code (ate ${QR_WAIT}s)"
-CONNECTED=false
-for i in $(seq 1 $(( QR_WAIT / 2 ))); do
-  STATE=$(api GET "/instance/connectionState/$INSTANCE" 2>/dev/null | python3 -c "
-import sys,json
-try:
-    d=json.load(sys.stdin)
-    print((d.get('instance') or {}).get('state') or '')
-except Exception:
-    print('')
-" || echo "")
-  if [[ "$STATE" == "open" ]]; then CONNECTED=true; echo "    WhatsApp conectado!"; break; fi
-  printf "\r    aguardando... (%ss)" $((i*2))
-  sleep 2
-done
-echo ""
-
-if [[ "$CONNECTED" != true ]]; then
-  echo "AVISO: ainda nao conectou. O QR expira em ~40s - rode o script de novo para gerar outro." >&2
-  echo "       Voce ainda pode configurar o filtro depois de conectar." >&2
+  echo "AVISO: whatsapp.sh nao encontrado - pulando a conexao." >&2
+  echo "       Conecte depois com: ./whatsapp.sh connect" >&2
 fi
 
 echo "==> 4/5 Cadastrando as credenciais da OpenAI"
@@ -208,8 +165,21 @@ except Exception: print('')
 if [[ -n "$BOT_ID" ]]; then
   echo "    Filtro criado. botId: $BOT_ID"
 else
-  echo "    Resposta do servidor:"
-  echo "$BOT"
+  # Rodar o script de novo e' comum; nesse caso o filtro ja existe.
+  BOT_ID=$(api GET "/aiFilter/find/$INSTANCE" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    print(d[0]['id'] if isinstance(d,list) and d else '')
+except Exception: print('')
+")
+  if [[ -n "$BOT_ID" ]]; then
+    echo "    Filtro ja existia, reaproveitando. botId: $BOT_ID"
+  else
+    echo "    ERRO: nao consegui criar nem localizar o filtro." >&2
+    echo "    Resposta do servidor: $BOT" >&2
+    exit 1
+  fi
 fi
 
 echo ""
@@ -229,6 +199,12 @@ echo "   spam       -> ignora"
 echo ""
 echo " Grupos estao sendo ignorados (ignoreJids: @g.us)."
 echo " Mande uma mensagem de outro celular para testar."
+echo ""
+echo " Gerenciar a conexao do WhatsApp:"
+echo "   ./whatsapp.sh status     ver se esta conectado"
+echo "   ./whatsapp.sh connect    conectar (QR no terminal)"
+echo "   ./whatsapp.sh connect 5511999999999   conectar por codigo, sem QR"
+echo "   ./whatsapp.sh logout     trocar de numero"
 echo ""
 echo " Ver conversas paradas para atendimento humano:"
 echo "   curl -H 'apikey: \$API_KEY' $API_URL/aiFilter/fetchSessions/$BOT_ID/$INSTANCE"
