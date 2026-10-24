@@ -17,6 +17,8 @@ import { ChannelController } from './integrations/channel/channel.controller';
 import { EvolutionController } from './integrations/channel/evolution/evolution.controller';
 import { MetaController } from './integrations/channel/meta/meta.controller';
 import { BaileysController } from './integrations/channel/whatsapp/baileys.controller';
+import { AiFilterController } from './integrations/chatbot/aiFilter/controllers/aiFilter.controller';
+import { AiFilterService } from './integrations/chatbot/aiFilter/services/aiFilter.service';
 import { ChatbotController } from './integrations/chatbot/chatbot.controller';
 import { ChatwootController } from './integrations/chatbot/chatwoot/controllers/chatwoot.controller';
 import { ChatwootService } from './integrations/chatbot/chatwoot/services/chatwoot.service';
@@ -137,5 +139,8 @@ export const n8nController = new N8nController(n8nService, prismaRepository, waM
 
 const evoaiService = new EvoaiService(waMonitor, prismaRepository, configService, openaiService);
 export const evoaiController = new EvoaiController(evoaiService, prismaRepository, waMonitor);
+
+const aiFilterService = new AiFilterService(waMonitor, prismaRepository, configService);
+export const aiFilterController = new AiFilterController(aiFilterService, prismaRepository, waMonitor);
 
 logger.info('Module - ON');

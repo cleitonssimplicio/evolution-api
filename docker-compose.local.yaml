@@ -1,0 +1,93 @@
+# Ambiente local completo do Evolution API com a integracao AiFilter.
+# Diferente do docker-compose.yaml, esta versao compila a imagem a partir do
+# codigo deste repositorio (build: .) para incluir o AiFilter, e nao depende
+# de nenhuma rede externa.
+#
+# Uso:
+#   cp .env.docker.example .env
+#   (edite o .env: AUTHENTICATION_API_KEY e OPENAI_API_KEY_GLOBAL)
+#   docker compose -f docker-compose.local.yaml up -d --build
+
+services:
+  api:
+    container_name: evolution_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evolution-net
+    env_file:
+      - .env
+
+  manager:
+    container_name: evolution_manager
+    image: evoapicloud/evolution-manager:latest
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+    networks:
+      - evolution-net
+
+  redis:
+    container_name: evolution_redis
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --port 6379 --appendonly yes
+    volumes:
+      - evolution_redis:/data
+    networks:
+      evolution-net:
+        aliases:
+          - evolution-redis
+    expose:
+      - "6379"
+
+  postgres:
+    container_name: evolution_postgres
+    image: postgres:15-alpine
+    restart: always
+    command:
+      - postgres
+      - -c
+      - max_connections=1000
+      - -c
+      - listen_addresses=*
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:-evolution}
+      POSTGRES_USER: ${POSTGRES_USERNAME:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evolution_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      evolution-net:
+        aliases:
+          - evolution-postgres
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-evolution} -d ${POSTGRES_DATABASE:-evolution}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  evolution_instances:
+  evolution_redis:
+  postgres_data:
+
+networks:
+  evolution-net:
+    name: evolution-net
+    driver: bridge
