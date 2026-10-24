@@ -93,6 +93,47 @@ for i in d:
 cmd_connect() {
   local number="${1:-}"
 
+  # Valida o numero antes de incomodar a API: um digito errado aqui vira um
+  # erro obscuro la na frente.
+  if [[ -n "$number" ]]; then
+    local so_digitos=${number//[^0-9]/}
+
+    if [[ "$so_digitos" != "$number" ]]; then
+      echo "Aviso: removi os caracteres nao numericos. Usando: $so_digitos"
+      number=$so_digitos
+    fi
+
+    if (( ${#number} < 10 || ${#number} > 15 )); then
+      echo "ERRO: '$number' tem ${#number} digitos - isso nao parece um numero valido." >&2
+      echo "" >&2
+      echo "Use o formato internacional, so numeros:" >&2
+      echo "  codigo do pais + DDD + numero" >&2
+      echo "" >&2
+      echo "  Brasil, celular em Alagoas (82):  5582912345678" >&2
+      echo "  Brasil, celular em Sao Paulo:     5511987654321" >&2
+      echo "" >&2
+      echo "Nao use +, espacos, parenteses nem zero antes do DDD." >&2
+      return 1
+    fi
+
+    if [[ "$number" == 0* ]]; then
+      echo "ERRO: o numero nao pode comecar com zero." >&2
+      echo "      Tire o 0 do DDD e coloque o codigo do pais na frente." >&2
+      echo "      Ex: 082 91234-5678  ->  5582912345678" >&2
+      return 1
+    fi
+
+    # Celular brasileiro: 55 + DDD (2) + 9 + 8 digitos = 13.
+    if [[ "$number" == 55* ]] && (( ${#number} != 13 )); then
+      echo "Aviso: numeros do Brasil (55) normalmente tem 13 digitos; este tem ${#number}."
+      echo "       Celular precisa do 9 antes dos 8 digitos finais."
+      echo "       Conferindo: 55 + DDD + 9XXXXXXXX"
+      echo ""
+      read -r -p "       Seguir com '$number' assim mesmo? [s/N] " ok
+      [[ "$ok" == "s" || "$ok" == "S" ]] || return 1
+    fi
+  fi
+
   # Cria a instancia se ainda nao existir.
   if ! api GET "/instance/connectionState/$INSTANCE" | grep -q '"state"'; then
     echo "Criando a instancia '$INSTANCE'..."
