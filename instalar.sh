@@ -107,12 +107,21 @@ if [[ "${PULAR_ENV:-0}" != "1" ]]; then
   echo "  Pegue sua chave em: $LINK"
   echo "  (crie a conta, gere a chave e copie)"
   echo ""
+  echo "  A chave NAO vai aparecer na tela enquanto voce cola - isso e de"
+  echo "  proposito, para ela nao ficar no historico do terminal."
+  echo ""
 
   CHAVE_IA=""
   while [[ -z "$CHAVE_IA" ]]; do
-    read -r -p "  Cole a chave aqui: " CHAVE_IA
+    # -s nao ecoa: a chave e uma credencial, nao deve ficar visivel nem no
+    # scrollback nem em uma gravacao de tela.
+    read -r -s -p "  Cole a chave aqui e aperte Enter: " CHAVE_IA
+    echo ""
     if [[ -z "$CHAVE_IA" ]]; then
       echo "  A chave nao pode ficar vazia."
+    else
+      # Confirma que colou algo plausivel, sem revelar a chave.
+      echo "  Recebi uma chave de ${#CHAVE_IA} caracteres (terminando em ...${CHAVE_IA: -4})."
     fi
   done
 
@@ -145,8 +154,11 @@ PY
 
   echo ""
   echo "  Configuracao salva em .env"
-  echo "  Sua chave de acesso a API: $CHAVE_API"
-  echo "  (guarde, e o que protege sua API - esta salva no .env)"
+  echo "  A chave de acesso da sua API foi gerada automaticamente e esta"
+  echo "  guardada no .env (o git ignora esse arquivo, nao vai para o GitHub)."
+  echo ""
+  echo "  Se precisar consultar depois:"
+  echo "     grep AUTHENTICATION_API_KEY .env"
 fi
 
 # --------------------------------------------------------------- containers
