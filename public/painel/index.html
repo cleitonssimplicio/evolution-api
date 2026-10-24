@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Filtro de IA</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --tx:#16181d; --tx2:#636a75; --bd:#e3e6ea;
+    --ac:#1f8f4e; --ac-tx:#fff; --warn:#8a5a00; --warn-bg:#fff6e0; --warn-bd:#f0d79a;
+    --err:#a3271f; --err-bg:#fdeceb; --err-bd:#f2c0bc;
+    --wait-bg:#fff6e0; --wait-bd:#f0d79a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161a; --card:#1c1f25; --tx:#eceef1; --tx2:#9aa2ad; --bd:#2c3139;
+      --ac:#35b96a; --ac-tx:#06130b; --warn:#f0cd82; --warn-bg:#2e2616; --warn-bd:#4d401f;
+      --err:#f3a39c; --err-bg:#331b19; --err-bd:#5b2a26;
+      --wait-bg:#2e2616; --wait-bd:#4d401f;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--tx);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:0 16px 48px;-webkit-text-size-adjust:100%;
+  }
+  header{padding:24px 0 8px}
+  h1{font-size:1.35rem;margin:0 0 4px}
+  .sub{color:var(--tx2);font-size:.9rem;margin:0}
+  nav{display:flex;gap:6px;overflow-x:auto;padding:16px 0;position:sticky;top:0;background:var(--bg);z-index:5}
+  nav button{
+    flex:0 0 auto;padding:9px 14px;border:1px solid var(--bd);background:var(--card);
+    color:var(--tx);border-radius:999px;font-size:.9rem;cursor:pointer;
+  }
+  nav button[aria-selected="true"]{background:var(--ac);color:var(--ac-tx);border-color:var(--ac)}
+  section{display:none}
+  section.on{display:block}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:1rem;margin:0 0 12px}
+  label{display:block;font-size:.85rem;color:var(--tx2);margin:12px 0 5px}
+  input,select,textarea{
+    width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;
+    background:var(--bg);color:var(--tx);font-size:16px;font-family:inherit;
+  }
+  textarea{min-height:76px;resize:vertical}
+  button.go{
+    width:100%;margin-top:14px;padding:14px;border:0;border-radius:10px;
+    background:var(--ac);color:var(--ac-tx);font-size:1rem;font-weight:600;cursor:pointer;
+  }
+  button.go[disabled]{opacity:.55}
+  button.alt{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+  .msg{padding:12px;border-radius:10px;margin-top:12px;font-size:.9rem;display:none;white-space:pre-wrap;word-break:break-word}
+  .msg.on{display:block}
+  .msg.ok{background:var(--wait-bg);border:1px solid var(--wait-bd);color:var(--warn)}
+  .msg.bad{background:var(--err-bg);border:1px solid var(--err-bd);color:var(--err)}
+  .hint{color:var(--tx2);font-size:.82rem;margin-top:6px}
+  .code{
+    font:700 1.9rem/1.25 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.14em;text-align:center;padding:18px;margin-top:14px;
+    background:var(--bg);border:2px dashed var(--ac);border-radius:12px;
+    user-select:all;-webkit-user-select:all;
+  }
+  .chat{border:1px solid var(--bd);border-radius:12px;padding:13px;margin-bottom:10px;background:var(--card)}
+  .chat.wait{background:var(--wait-bg);border-color:var(--wait-bd)}
+  .chat b{display:block;font-size:1rem}
+  .chat .st{font-size:.8rem;color:var(--tx2);margin:3px 0 10px}
+  .chat .row{display:flex;gap:8px;margin-top:8px}
+  .chat .row button{flex:1;padding:11px;font-size:.88rem;border-radius:9px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);cursor:pointer}
+  .chat .row button.send{background:var(--ac);color:var(--ac-tx);border-color:var(--ac)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  .dot.up{background:var(--ac)} .dot.down{background:#b9332a}
+  fieldset{border:1px solid var(--bd);border-radius:12px;padding:12px;margin:0 0 12px}
+  legend{font-size:.85rem;color:var(--tx2);padding:0 6px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Filtro de IA do WhatsApp</h1>
+  <p class="sub">Painel de controle — funciona no celular, sem terminal.</p>
+</header>
+
+<nav role="tablist">
+  <button role="tab" data-go="acesso" aria-selected="true">1. Acesso</button>
+  <button role="tab" data-go="conectar" aria-selected="false">2. WhatsApp</button>
+  <button role="tab" data-go="filtro" aria-selected="false">3. Filtro</button>
+  <button role="tab" data-go="atender" aria-selected="false">4. Atender</button>
+</nav>
+
+<!-- ============================================================ ACESSO -->
+<section id="acesso" class="on">
+  <div class="card">
+    <h2>Chave de acesso da API</h2>
+    <p class="hint">É o valor de <code>AUTHENTICATION_API_KEY</code> que você
+    configurou no servidor. Fica guardada apenas neste navegador.</p>
+    <label for="k">Chave</label>
+    <input id="k" type="password" autocomplete="off" placeholder="cole aqui">
+    <label for="inst">Nome da instância</label>
+    <input id="inst" value="meu-whatsapp" autocomplete="off">
+    <p class="hint">Um apelido para esta conexão. Se não souber, deixe como está.</p>
+    <button class="go" id="kSave">Salvar e testar</button>
+    <div class="msg" id="kMsg"></div>
+  </div>
+</section>
+
+<!-- ========================================================== CONECTAR -->
+<section id="conectar">
+  <div class="card">
+    <h2>Situação da conexão</h2>
+    <p id="st"><span class="dot down"></span>verificando…</p>
+    <button class="go alt" id="stBtn">Atualizar</button>
+  </div>
+
+  <div class="card">
+    <h2>Conectar seu número</h2>
+    <p class="hint">Você está no celular, então use o código de 8 dígitos —
+    não é possível escanear um QR code exibido na própria tela.</p>
+    <label for="num">Seu número com país e DDD</label>
+    <input id="num" inputmode="numeric" placeholder="5582912345678">
+    <p class="hint">Só números. Exemplo: 55 + 82 + 912345678</p>
+    <button class="go" id="cBtn">Gerar código</button>
+    <div class="msg" id="cMsg"></div>
+    <div class="code" id="cCode" hidden></div>
+    <div id="cHow" hidden>
+      <p class="hint" style="margin-top:14px">
+        No WhatsApp: <b>Configurações</b> → <b>Aparelhos conectados</b> →
+        <b>Conectar aparelho</b> → <b>Conectar com número de telefone</b>,
+        e digite o código acima.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Desconectar</h2>
+    <p class="hint">Solta o celular atual sem apagar as configurações do filtro.</p>
+    <button class="go alt" id="outBtn">Desconectar este número</button>
+    <div class="msg" id="outMsg"></div>
+  </div>
+</section>
+
+<!-- ============================================================ FILTRO -->
+<section id="filtro">
+  <div class="card">
+    <h2>Cérebro do filtro</h2>
+    <label for="prov">Provedor de IA</label>
+    <select id="prov">
+      <option value="groq">Groq — grátis, rápido (recomendado)</option>
+      <option value="gemini">Gemini — grátis, do Google</option>
+      <option value="openrouter">OpenRouter — grátis nos modelos :free</option>
+      <option value="openai">OpenAI — pago</option>
+    </select>
+    <p class="hint" id="provHint"></p>
+    <label for="aiKey">Chave do provedor</label>
+    <input id="aiKey" type="password" autocomplete="off" placeholder="cole aqui">
+    <label for="model">Modelo (deixe vazio para o padrão)</label>
+    <input id="model" autocomplete="off" placeholder="padrão do provedor">
+  </div>
+
+  <div class="card">
+    <h2>O que a IA faz com cada mensagem</h2>
+    <fieldset>
+      <legend>Responder sozinha</legend>
+      <label for="cAuto">Quais mensagens</label>
+      <textarea id="cAuto">Perguntas sobre produtos, precos, horarios, funcionamento, e cumprimentos simples</textarea>
+    </fieldset>
+    <fieldset>
+      <legend>Chamar você</legend>
+      <label for="cHuman">Quais mensagens</label>
+      <textarea id="cHuman">Pedidos de desconto, fechamento de venda, reclamacoes e assuntos sensiveis</textarea>
+    </fieldset>
+    <fieldset>
+      <legend>Ignorar</legend>
+      <label for="cIgn">Quais mensagens</label>
+      <textarea id="cIgn">Propaganda, corrente, golpe ou mensagem irrelevante</textarea>
+    </fieldset>
+    <label for="tone">Como a IA deve responder</label>
+    <textarea id="tone">Voce e um atendente virtual educado e objetivo. Responda em portugues do Brasil, em no maximo 3 frases.</textarea>
+    <button class="go" id="fBtn">Ligar o filtro</button>
+    <div class="msg" id="fMsg"></div>
+  </div>
+</section>
+
+<!-- =========================================================== ATENDER -->
+<section id="atender">
+  <div class="card">
+    <h2>Conversas</h2>
+    <p class="hint">As que a IA passou para você aparecem destacadas no topo.</p>
+    <button class="go alt" id="aBtn">Atualizar</button>
+    <div class="msg" id="aMsg"></div>
+  </div>
+  <div id="list"></div>
+</section>
+
+<script>
+(function(){
+  "use strict";
+
+  var PROV = {
+    groq:      {url:"https://api.groq.com/openai/v1",                          model:"llama-3.3-70b-versatile",            link:"console.groq.com/keys"},
+    gemini:    {url:"https://generativelanguage.googleapis.com/v1beta/openai", model:"gemini-2.0-flash",                   link:"aistudio.google.com/apikey"},
+    openrouter:{url:"https://openrouter.ai/api/v1",                            model:"meta-llama/llama-3.3-70b-instruct:free", link:"openrouter.ai/keys"},
+    openai:    {url:"",                                                        model:"gpt-4o-mini",                        link:"platform.openai.com/api-keys"}
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var key = "", inst = "meu-whatsapp", botId = "";
+
+  // localStorage pode lancar em modo privado; a pagina precisa funcionar sem ele.
+  function store(k, v){
+    try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }
+    catch(e){ return null; }
+  }
+
+  function say(el, text, bad){
+    el.textContent = text;
+    el.className = "msg on " + (bad ? "bad" : "ok");
+  }
+  function hide(el){ el.className = "msg"; }
+
+  function api(method, path, body){
+    var opt = { method:method, headers:{ "apikey":key } };
+    if (body){ opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+    return fetch(path, opt).then(function(r){
+      return r.text().then(function(t){
+        var d = null;
+        try { d = t ? JSON.parse(t) : null; } catch(e){ d = t; }
+        if (!r.ok){
+          var m = (d && d.response && d.response.message) || (d && d.message) || ("erro " + r.status);
+          throw new Error(Array.isArray(m) ? String(m[0]) : String(m));
+        }
+        return d;
+      });
+    });
+  }
+
+  // ------------------------------------------------------------ navegacao
+  var tabs = document.querySelectorAll("nav button");
+  Array.prototype.forEach.call(tabs, function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call(tabs, function(o){ o.setAttribute("aria-selected", o === b ? "true" : "false"); });
+      Array.prototype.forEach.call(document.querySelectorAll("section"), function(s){ s.classList.remove("on"); });
+      $(b.dataset.go).classList.add("on");
+      if (b.dataset.go === "conectar") estado();
+      if (b.dataset.go === "atender") listar();
+      window.scrollTo(0,0);
+    });
+  });
+
+  // --------------------------------------------------------------- acesso
+  var sk = store("afKey"), si = store("afInst");
+  if (sk){ key = sk; $("k").value = sk; }
+  if (si){ inst = si; $("inst").value = si; }
+
+  $("kSave").addEventListener("click", function(){
+    key = $("k").value.trim();
+    inst = ($("inst").value.trim() || "meu-whatsapp");
+    if (!key){ say($("kMsg"), "Cole a chave de acesso.", true); return; }
+    store("afKey", key); store("afInst", inst);
+    say($("kMsg"), "Testando…");
+    api("GET", "/instance/fetchInstances").then(function(){
+      say($("kMsg"), "Chave aceita. Toque em \"2. WhatsApp\" para continuar.");
+    }).catch(function(e){
+      say($("kMsg"), "A chave nao foi aceita: " + e.message, true);
+    });
+  });
+
+  function exige(el){
+    if (!key){ say(el, "Preencha a chave de acesso na aba 1 primeiro.", true); return false; }
+    return true;
+  }
+
+  // ------------------------------------------------------------- conexao
+  function estado(){
+    if (!key){ $("st").innerHTML = '<span class="dot down"></span>informe a chave na aba 1'; return; }
+    $("st").innerHTML = '<span class="dot down"></span>verificando…';
+    api("GET", "/instance/connectionState/" + encodeURIComponent(inst)).then(function(d){
+      var s = (d && d.instance && d.instance.state) || "?";
+      if (s === "open") $("st").innerHTML = '<span class="dot up"></span><b>Conectado</b> — o filtro esta ativo.';
+      else if (s === "connecting") $("st").innerHTML = '<span class="dot down"></span>Aguardando voce digitar o codigo.';
+      else $("st").innerHTML = '<span class="dot down"></span>Desconectado — gere um codigo abaixo.';
+    }).catch(function(){
+      $("st").innerHTML = '<span class="dot down"></span>Instancia ainda nao existe — gere um codigo abaixo.';
+    });
+  }
+  $("stBtn").addEventListener("click", estado);
+
+  $("cBtn").addEventListener("click", function(){
+    if (!exige($("cMsg"))) return;
+    var n = $("num").value.replace(/\D/g, "");
+    if (n.length < 10 || n.length > 15){
+      say($("cMsg"), "Numero invalido. Use pais + DDD + numero, so digitos.", true); return;
+    }
+    if (n.charAt(0) === "0"){
+      say($("cMsg"), "Nao comece com zero. Tire o 0 do DDD e use 55 na frente.", true); return;
+    }
+    if (n.indexOf("55") === 0 && n.length !== 13){
+      say($("cMsg"), "Numeros do Brasil costumam ter 13 digitos (55 + DDD + 9 + 8). Confira.", true); return;
+    }
+
+    var b = $("cBtn");
+    b.disabled = true; b.textContent = "Gerando…";
+    $("cCode").hidden = true; $("cHow").hidden = true;
+    say($("cMsg"), "Criando a conexao, isso leva alguns segundos…");
+
+    api("GET", "/instance/connectionState/" + encodeURIComponent(inst))
+      .catch(function(){
+        return api("POST", "/instance/create", {
+          instanceName: inst, qrcode: false, integration: "WHATSAPP-BAILEYS"
+        });
+      })
+      .then(function(){ return tentarCodigo(n, 10); })
+      .then(function(code){
+        $("cCode").textContent = code;
+        $("cCode").hidden = false; $("cHow").hidden = false;
+        say($("cMsg"), "Codigo gerado. Ele expira rapido — digite agora.");
+        esperarConexao(20);
+      })
+      .catch(function(e){
+        say($("cMsg"),
+          "Nao consegui gerar o codigo.\n" + e.message +
+          "\n\nSe isso persistir, o servidor pode nao estar alcancando o WhatsApp.", true);
+      })
+      .then(function(){ b.disabled = false; b.textContent = "Gerar codigo"; });
+  });
+
+  // A API espera pouco pelo codigo e pode responder vazio enquanto sobe.
+  function tentarCodigo(num, tentativas){
+    return api("GET", "/instance/connect/" + encodeURIComponent(inst) + "?number=" + encodeURIComponent(num))
+      .then(function(d){
+        var c = d && d.pairingCode;
+        if (c) return c;
+        if (tentativas <= 1) throw new Error("O servidor nao devolveu o codigo.");
+        return new Promise(function(r){ setTimeout(r, 2500); }).then(function(){
+          return tentarCodigo(num, tentativas - 1);
+        });
+      });
+  }
+
+  function esperarConexao(n){
+    if (n <= 0) return;
+    setTimeout(function(){
+      api("GET", "/instance/connectionState/" + encodeURIComponent(inst)).then(function(d){
+        if (d && d.instance && d.instance.state === "open"){
+          say($("cMsg"), "Conectado! Pode seguir para a aba \"3. Filtro\".");
+          $("cCode").hidden = true; $("cHow").hidden = true;
+          estado();
+        } else esperarConexao(n - 1);
+      }).catch(function(){ esperarConexao(n - 1); });
+    }, 3000);
+  }
+
+  $("outBtn").addEventListener("click", function(){
+    if (!exige($("outMsg"))) return;
+    api("DELETE", "/instance/logout/" + encodeURIComponent(inst)).then(function(){
+      say($("outMsg"), "Desconectado. As configuracoes do filtro foram mantidas.");
+      estado();
+    }).catch(function(e){ say($("outMsg"), e.message, true); });
+  });
+
+  // -------------------------------------------------------------- filtro
+  function dicaProvedor(){
+    var p = PROV[$("prov").value];
+    $("provHint").textContent = "Pegue a chave em " + p.link + " — modelo padrao: " + p.model;
+    $("model").placeholder = p.model;
+  }
+  $("prov").addEventListener("change", dicaProvedor);
+  dicaProvedor();
+
+  $("fBtn").addEventListener("click", function(){
+    if (!exige($("fMsg"))) return;
+    var aiKey = $("aiKey").value.trim();
+    if (!aiKey){ say($("fMsg"), "Cole a chave do provedor de IA.", true); return; }
+
+    var p = PROV[$("prov").value];
+    var b = $("fBtn");
+    b.disabled = true; b.textContent = "Configurando…";
+    say($("fMsg"), "Salvando…");
+
+    var nome = "painel-" + Date.now();
+    api("POST", "/openai/creds/" + encodeURIComponent(inst), { name:nome, apiKey:aiKey })
+      .then(function(d){ return d && d.id; })
+      .catch(function(){
+        // Chave ja cadastrada: reaproveita a existente.
+        return api("GET", "/openai/creds/" + encodeURIComponent(inst)).then(function(l){
+          if (l && l.length) return l[0].id;
+          throw new Error("Nao consegui cadastrar a chave do provedor.");
+        });
+      })
+      .then(function(credsId){
+        return api("POST", "/aiFilter/create/" + encodeURIComponent(inst), {
+          enabled:true,
+          description:"Filtro criado pelo painel",
+          openaiCredsId:credsId,
+          model:($("model").value.trim() || p.model),
+          apiBaseUrl:p.url,
+          triggerType:"all",
+          systemPrompt:"Voce classifica mensagens recebidas no WhatsApp de um negocio. Seja preciso e responda sempre em portugues do Brasil.",
+          autoRespondPrompt:$("tone").value.trim(),
+          filterCategories:[
+            {name:"responder", description:$("cAuto").value.trim(),  action:"auto_respond"},
+            {name:"humano",    description:$("cHuman").value.trim(), action:"flag_human"},
+            {name:"ignorar",   description:$("cIgn").value.trim(),   action:"ignore"}
+          ],
+          expire:0, keywordFinish:"#sair", delayMessage:1000,
+          unknownMessage:"Um atendente vai te responder em instantes.",
+          listeningFromMe:false, stopBotFromMe:true, keepOpen:true,
+          debounceTime:3, ignoreJids:["@g.us"], splitMessages:false, timePerChar:0
+        });
+      })
+      .then(function(){
+        say($("fMsg"), "Filtro ligado. Peca para alguem mandar uma mensagem e acompanhe na aba \"4. Atender\".");
+      })
+      .catch(function(e){
+        var m = e.message || "";
+        if (m.indexOf("All") >= 0 || m.toLowerCase().indexOf("already") >= 0){
+          say($("fMsg"), "Ja existe um filtro ativo nesta instancia. Ele continua valendo — veja a aba \"4. Atender\".");
+        } else {
+          say($("fMsg"), "Nao consegui ligar o filtro: " + m, true);
+        }
+      })
+      .then(function(){ b.disabled = false; b.textContent = "Ligar o filtro"; });
+  });
+
+  // ------------------------------------------------------------- atender
+  // A API as vezes devolve erro interno (TypeError e afins) quando o WhatsApp
+  // caiu. Mostrar isso cru nao ajuda ninguem; traduz para algo acionavel.
+  function explicarFalha(m){
+    if (m === "__OFF__") return "nao enviado: o WhatsApp esta desconectado. Reconecte na aba 2.";
+    if (m.indexOf("Connection Closed") >= 0 || m.indexOf("Connection Terminated") >= 0)
+      return "nao enviado: a conexao com o WhatsApp caiu. Reconecte na aba 2.";
+    if (m.indexOf("Cannot read") >= 0 || m.indexOf("undefined") >= 0)
+      return "nao enviado: o servidor nao conseguiu falar com o WhatsApp. Confira a aba 2.";
+    if (m.indexOf("exists") >= 0 || m.indexOf("not on whatsapp") >= 0)
+      return "nao enviado: este numero nao parece ter WhatsApp.";
+    return "nao enviado: " + m;
+  }
+
+  function listar(){
+    if (!key){ say($("aMsg"), "Preencha a chave de acesso na aba 1 primeiro.", true); return; }
+    hide($("aMsg"));
+    $("list").innerHTML = "";
+
+    api("GET", "/aiFilter/find/" + encodeURIComponent(inst)).then(function(bots){
+      if (!bots || !bots.length) throw new Error("Nenhum filtro configurado ainda. Use a aba \"3. Filtro\".");
+      botId = bots[0].id;
+      return api("GET", "/aiFilter/fetchSessions/" + encodeURIComponent(botId) + "/" + encodeURIComponent(inst));
+    }).then(function(ss){
+      if (!ss || !ss.length){
+        say($("aMsg"), "Nenhuma conversa ainda. Peca para alguem mandar uma mensagem.");
+        return;
+      }
+      ss.sort(function(a,b){
+        var pa = a.status === "paused" ? 0 : 1, pb = b.status === "paused" ? 0 : 1;
+        return pa - pb;
+      });
+      ss.forEach(desenhar);
+    }).catch(function(e){ say($("aMsg"), e.message, true); });
+  }
+  $("aBtn").addEventListener("click", listar);
+
+  function desenhar(s){
+    var jid = s.remoteJid || "";
+    var num = jid.split("@")[0];
+    var esperando = s.status === "paused";
+
+    var d = document.createElement("div");
+    d.className = "chat" + (esperando ? " wait" : "");
+
+    var nome = document.createElement("b");
+    nome.textContent = (s.pushName || num);
+    d.appendChild(nome);
+
+    var st = document.createElement("div");
+    st.className = "st";
+    st.textContent = num + " — " + (esperando ? "esperando VOCE responder"
+                   : s.status === "opened" ? "a IA esta cuidando"
+                   : "encerrada");
+    d.appendChild(st);
+
+    if (esperando){
+      var ta = document.createElement("textarea");
+      ta.placeholder = "Escreva sua resposta…";
+      d.appendChild(ta);
+
+      var row = document.createElement("div");
+      row.className = "row";
+
+      var env = document.createElement("button");
+      env.className = "send";
+      env.textContent = "Enviar";
+      env.addEventListener("click", function(){
+        var txt = ta.value.trim();
+        if (!txt) return;
+        env.disabled = true; env.textContent = "Enviando…";
+
+        // Confere a conexao antes: com o WhatsApp fora do ar a API devolve
+        // erros internos que nao dizem nada ao usuario.
+        api("GET", "/instance/connectionState/" + encodeURIComponent(inst))
+          .then(function(d){
+            var s = d && d.instance && d.instance.state;
+            if (s !== "open"){
+              throw new Error("__OFF__");
+            }
+            return api("POST", "/message/sendText/" + encodeURIComponent(inst), { number:num, text:txt });
+          })
+          .then(function(){ st.textContent = num + " — respondido por voce"; ta.value = ""; })
+          .catch(function(e){
+            st.textContent = num + " — " + explicarFalha(e.message || "");
+          })
+          .then(function(){ env.disabled = false; env.textContent = "Enviar"; });
+      });
+      row.appendChild(env);
+
+      var vol = document.createElement("button");
+      vol.textContent = "Devolver para a IA";
+      vol.addEventListener("click", function(){
+        vol.disabled = true;
+        api("POST", "/aiFilter/changeStatus/" + encodeURIComponent(inst), { remoteJid:jid, status:"opened" })
+          .then(function(){ listar(); })
+          .catch(function(e){ st.textContent = num + " — " + e.message; vol.disabled = false; });
+      });
+      row.appendChild(vol);
+
+      d.appendChild(row);
+    }
+
+    $("list").appendChild(d);
+  }
+
+  if (key) estado();
+})();
+</script>
+</body>
+</html>
